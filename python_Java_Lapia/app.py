@@ -4,7 +4,7 @@ import pandas as pd
 from io import BytesIO
 
 # ── Configuração ───────────────────────────────────────────────────────────────
-API_URL = "http://localhost:8080"
+API_URL = "https://lapia-sistema.onrender.com"
 
 st.set_page_config(
     page_title="LAPIA – Coleta de Dados Clínicos",
@@ -369,7 +369,6 @@ def calcular_resultado(escala_key, respostas_dict):
             resultado["interpretacao"].append(f"📊 Média hiperatividade ({media_hip:.2f}) ≥ ponto de corte parental (1,4)")
 
     elif escala_key == "SDQ":
-        # Subescalas SDQ (itens 1-based, invertidos: 7,11,14,17,21,25)
         invertidos = {7, 11, 14, 17, 21, 25}
         v = {}
         for i, val in enumerate(vals, 1):
@@ -424,7 +423,7 @@ def calcular_resultado(escala_key, respostas_dict):
         resultado["score_total"] = sub_obs + sub_comp
         t = resultado["score_total"]
         if t <= 7:
-            resultado["interpretacao"].append("✅ Subcrínico (0–7)")
+            resultado["interpretacao"].append("✅ Subclínico (0–7)")
         elif t <= 15:
             resultado["interpretacao"].append("🟡 Leve (8–15)")
         elif t <= 23:
@@ -450,9 +449,6 @@ def calcular_resultado(escala_key, respostas_dict):
         )
 
     elif escala_key == "IGDT-10":
-        # Escala original: 0=Nunca, 1=Às vezes, 2=Frequentemente
-        # Para o score DSM-5: apenas "Frequentemente" (2) conta como critério positivo (1 ponto)
-        # Itens 9 e 10 referem-se ao mesmo critério — combinados valem no máximo 1 ponto
         criterios = [1 if v == 2 else 0 for v in vals[:8]]
         criterio_9_10 = 1 if (len(vals) >= 10 and (vals[8] == 2 or vals[9] == 2)) else 0
         score_efetivo = sum(criterios) + criterio_9_10
@@ -465,16 +461,10 @@ def calcular_resultado(escala_key, respostas_dict):
         )
 
     elif escala_key == "SCARED":
-        # Subescalas conforme pontos de corte do instrumento
-        # Pânico/Sintomas Somáticos: itens 1,6,9,12,15,18,19,22,24,27,30,34,38 (índices 0-based: 0,5,8,11,14,17,18,21,23,26,29,33,37)
         panico_idx     = [0, 5, 8, 11, 14, 17, 18, 21, 23, 26, 29, 33, 37]
-        # Ansiedade Generalizada: itens 5,7,14,21,23,28,33,35,37 (índices 0-based: 4,6,13,20,22,27,32,34,36)
         tag_idx        = [4, 6, 13, 20, 22, 27, 32, 34, 36]
-        # Ansiedade de Separação: itens 4,8,13,16,20,25,29,31 (índices 0-based: 3,7,12,15,19,24,28,30)
         sep_idx        = [3, 7, 12, 15, 19, 24, 28, 30]
-        # Ansiedade Social: itens 3,10,26,32,39,40,41 (índices 0-based: 2,9,25,31,38,39,40)
         social_idx     = [2, 9, 25, 31, 38, 39, 40]
-        # Evitação Escolar: itens 2,11,17,36 (índices 0-based: 1,10,16,35)
         escolar_idx    = [1, 10, 16, 35]
 
         def sub(indices):
@@ -519,21 +509,25 @@ def calcular_resultado(escala_key, respostas_dict):
 
 def listar_participantes():
     try:
-        r = requests.get(f"{API_URL}/participantes", timeout=5)
+        r = requests.get(f"{API_URL}/participantes", timeout=60)
         return r.json() if r.status_code == 200 else []
     except Exception:
         return []
 
 def criar_participante(nome, idade, sexo, diagnostico):
     payload = {"nome": nome, "idade": idade, "sexo": sexo, "Diagnostico": diagnostico}
-    return requests.post(f"{API_URL}/participantes", json=payload, timeout=5)
+    return requests.post(f"{API_URL}/participantes", json=payload, timeout=60)
 
-def criar_avaliacao(participante_id, respostas):
-    payload = {"participanteId": participante_id, "respostas": respostas}
-    return requests.post(f"{API_URL}/avaliacoes", json=payload, timeout=5)
+def criar_avaliacao(participante_id, nome_escala, respostas):
+    payload = {
+        "participanteId": participante_id,
+        "nomeEscala": nome_escala,
+        "respostas": respostas,
+    }
+    return requests.post(f"{API_URL}/avaliacoes", json=payload, timeout=60)
 
 def deletar_participante(participante_id):
-    return requests.delete(f"{API_URL}/participantes/{participante_id}", timeout=5)
+    return requests.delete(f"{API_URL}/participantes/{participante_id}", timeout=60)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -547,7 +541,7 @@ pagina = st.sidebar.radio(
     ["Cadastro de Participante", "Aplicar Escala", "Visualizar e Exportar"],
 )
 st.sidebar.divider()
-st.sidebar.caption("Backend: `localhost:8080`")
+st.sidebar.caption("Backend: Online (Render)")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TELA 1 – CADASTRO
@@ -572,7 +566,7 @@ if pagina == "Cadastro de Participante":
         else:
             try:
                 resp = criar_participante(nome.strip(), int(idade), sexo, diagnostico.strip())
-                if resp.status_code == 201:
+                if resp.status_code in (200, 201):
                     st.success(f"Participante **{nome}** cadastrado com sucesso!")
                     st.json(resp.json())
                 else:
@@ -602,7 +596,6 @@ if pagina == "Cadastro de Participante":
         )
         id_excluir = opcoes_excluir[selecionado_excluir]
 
-        # Confirmação em duas etapas para evitar exclusão acidental
         confirmar = st.checkbox(
             f'Confirmo que desejo excluir "{selecionado_excluir}" e todos os seus dados.',
             key="confirmar_exclusao",
@@ -618,7 +611,7 @@ if pagina == "Cadastro de Participante":
             except Exception as e:
                 st.error(f"Não foi possível conectar ao backend: {e}")
     else:
-        st.info("Nenhum participante cadastrado ou backend inacessível.")
+        st.info("Nenhum participante cadastrado ou backend acordando (aguarde alguns segundos e recarregue).")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TELA 2 – APLICAR ESCALA
@@ -645,7 +638,6 @@ elif pagina == "Aplicar Escala":
     opcoes = escala["opcoes"]
     opcoes_labels = list(opcoes.keys())
 
-    # Aviso especial para IGDT-10 (encoding diferente)
     if escala_key == "IGDT-10":
         st.warning(
             "⚠️ Nesta escala: 'Nunca' e 'Algumas vezes' = 0 pontos; 'Frequentemente' = 1 ponto (critério DSM-5).",
@@ -673,7 +665,6 @@ elif pagina == "Aplicar Escala":
         submitted = st.form_submit_button("Salvar avaliação", type="primary")
 
     if submitted:
-        # Lógica de inversão HQ-25
         respostas_finais = dict(respostas_form)
         if escala_key == "HQ-25":
             max_val = max(opcoes.values())
@@ -683,22 +674,20 @@ elif pagina == "Aplicar Escala":
 
         resultado = calcular_resultado(escala_key, respostas_finais)
 
-        # Monta payload para o backend
         payload_respostas = [
             {"numeroQuestao": num, "valor": val}
             for num, val in respostas_finais.items()
         ]
 
         try:
-            resp = criar_avaliacao(participante_id, payload_respostas)
-            if resp.status_code == 201:
+            resp = criar_avaliacao(participante_id, escala_key, payload_respostas)
+            if resp.status_code in (200, 201):
                 st.success("✅ Avaliação salva com sucesso!")
             else:
                 st.warning(f"Backend retornou {resp.status_code} — os resultados abaixo foram calculados localmente.")
         except Exception:
             st.warning("Não foi possível conectar ao backend — os resultados abaixo foram calculados localmente.")
 
-        # Exibe resultados
         st.divider()
         st.subheader("Resultado")
         col1, col2 = st.columns(2)
@@ -747,16 +736,23 @@ elif pagina == "Visualizar e Exportar":
             "Diagnóstico": p.get("Diagnostico", ""),
         }
         if not avaliacoes:
-            linhas.append({**base, "ID Avaliação": None, "Data": None,
-                           "Score Total": None, "Média Desatenção": None,
-                           "Média Hiperatividade": None})
+            linhas.append({
+                **base,
+                "ID Avaliação": None,
+                "Escala": None,
+                "Data": None,
+                "Score Total": None,
+                "Média Desatenção": None,
+                "Média Hiperatividade": None,
+            })
         else:
             for av in avaliacoes:
                 linhas.append({
                     **base,
                     "ID Avaliação": av.get("id"),
+                    "Escala": av.get("nomeEscala"),
                     "Data": av.get("data") or av.get("dataCriacao"),
-                    "Score Total": av.get("pontuacaoSnapIV"),
+                    "Score Total": av.get("score") if av.get("score") is not None else av.get("pontuacaoSnapIV"),
                     "Média Desatenção": av.get("mediaDesatencao"),
                     "Média Hiperatividade": av.get("mediaHiperatividade"),
                 })
