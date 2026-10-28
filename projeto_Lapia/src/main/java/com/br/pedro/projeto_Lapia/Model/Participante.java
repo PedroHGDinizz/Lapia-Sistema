@@ -12,7 +12,7 @@ public class Participante {
     private Long id;
     private String nome;
     private String sexo;
-    private String Diagnostico;
+    private String diagnostico;
     private Integer idade;
 
     @OneToMany(mappedBy = "participante", cascade = CascadeType.ALL)
@@ -43,11 +43,11 @@ public class Participante {
     }
 
     public String getDiagnostico() {
-        return Diagnostico;
+        return diagnostico;
     }
 
     public void setDiagnostico(String diagnostico) {
-        Diagnostico = diagnostico;
+        this.diagnostico = diagnostico;
     }
 
     public Integer getIdade() {
