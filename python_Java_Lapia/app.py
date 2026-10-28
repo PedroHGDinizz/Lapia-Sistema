@@ -515,7 +515,7 @@ def listar_participantes():
         return []
 
 def criar_participante(nome, idade, sexo, diagnostico):
-    payload = {"nome": nome, "idade": idade, "sexo": sexo, "Diagnostico": diagnostico}
+    payload = {"nome": nome, "idade": idade, "sexo": sexo, "diagnostico": diagnostico}
     return requests.post(f"{API_URL}/participantes", json=payload, timeout=60)
 
 def criar_avaliacao(participante_id, nome_escala, respostas):
@@ -579,9 +579,9 @@ if pagina == "Cadastro de Participante":
     participantes = listar_participantes()
     if participantes:
         df = pd.DataFrame(participantes)
-        colunas = [c for c in ["id", "nome", "idade", "sexo", "Diagnostico"] if c in df.columns]
+        colunas = [c for c in ["id", "nome", "idade", "sexo", "diagnostico"] if c in df.columns]
         st.dataframe(df[colunas], use_container_width=True, hide_index=True)
-
+        
         st.divider()
         st.subheader("Excluir participante")
         st.warning(
@@ -733,7 +733,7 @@ elif pagina == "Visualizar e Exportar":
             "Nome": p.get("nome", ""),
             "Idade": p.get("idade", ""),
             "Sexo": p.get("sexo", ""),
-            "Diagnóstico": p.get("Diagnostico", ""),
+            "Diagnóstico": p.get("diagnostico", ""),
         }
         if not avaliacoes:
             linhas.append({
